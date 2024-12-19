@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import Button from "./Button";
 import useStore from "../store/useStore";
 import { useLocation } from "react-router-dom";
@@ -10,34 +10,16 @@ const Footer = () => {
     handleUpload,
     resetResults,
     selectedFile,
-    handlePLC,
     updateLoading,
   } = useStore();
 
-  const [isPLC, setIsPLC] = useState(false);
   const location = useLocation();
-  let interval = null;
 
   const resultRedirectFunction = async (callback) => {
     resetResults();
     const response = await callback();
     if (!response) return;
   };
-
-  useEffect(() => {
-    if (isPLC) {
-      interval = setInterval(handlePLC, 2000);
-    } else if (interval) {
-      clearInterval(interval);
-      interval = null;
-    }
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
-      }
-    };
-  }, [isPLC]);
 
   const isPredictPageRoute = location.pathname === "/predict";
 
@@ -51,19 +33,6 @@ const Footer = () => {
                 value="Generate"
                 type="filled"
                 onClick={() => resultRedirectFunction(handleGenerate)}
-              />
-              <Button
-                value={isPLC ? "Stop PLC" : "Start PLC"}
-                type={isPLC ? "filled" : ""}
-                onClick={() => {
-                  updateLoading(true);
-                  if (isPLC) {
-                    resetResults();
-                  } else {
-                    handlePLC();
-                  }
-                  setIsPLC((prev) => !prev);
-                }}
               />
             </div>
             <div className="flex gap-4 items-center">

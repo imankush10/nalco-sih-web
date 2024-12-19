@@ -99,6 +99,15 @@ const useStore = create((set, get) => ({
   plotError: null,
   plotLoading: false,
   dsbl: false,
+  isPLC: false,
+
+  setIsPLC: (valueOrUpdater) => {
+    set((state) => ({
+      isPLC: typeof valueOrUpdater === 'function' 
+        ? valueOrUpdater(state.isPLC) 
+        : valueOrUpdater
+    }));
+  },  
 
   setDisabled: () => set({ disabled: true }),
 
@@ -238,13 +247,14 @@ const useStore = create((set, get) => ({
 
   handlePLC: async () => {
     try {
+      console.log('sup');
       const res = await apiCall("/predict-real-time", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          port: "COM2",
+          port: "COM1",
           slave_id: 1,
           start_address: 0,
           num_registers: 24,
@@ -298,6 +308,7 @@ const useStore = create((set, get) => ({
       get().updateLoading(false);
       get().updatePlc();
     } catch (error) {
+      set({ isPLC: false });
       console.log(error);
     }
   },

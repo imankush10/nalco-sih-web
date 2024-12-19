@@ -73,7 +73,7 @@ const Sidebar = () => {
           <span className="bg-transparent">Set default</span>
         </NavLink>
       </div>
-      {location.pathname == "/home" && (
+      {/* {location.pathname == "/home" && (
         <div className="h-48">
           <div className="flex flex-col gap-2 border-2 rounded-md p-1 m-auto w-52 py-4 px-2">
             <label className="text-xl">Enter Port</label>
@@ -93,7 +93,7 @@ const Sidebar = () => {
             Start
           </NavLink>
         </div>
-      )}
+      )} */}
 
       {/* <NavLink
         to="/plot"

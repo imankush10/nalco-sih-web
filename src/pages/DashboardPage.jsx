@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -10,109 +10,128 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import Button from "../components/Button";
+import useStore from "../store/useStore";
+import { useState } from "react";
 
 const SemiCircleGauge = ({ value, max, title, color }) => {
   const percentage = Math.min(100, (value / max) * 100);
+  const radius = 100;
+  const strokeWidth = 20;
+  const normalizedRadius = radius - strokeWidth / 2;
+  const circumference = 2 * Math.PI * normalizedRadius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="text-sm font-medium mb-2">{title}</div>
-      <div className="relative w-24 h-12 overflow-hidden">
-        <div className="absolute w-24 h-24 bg-gray-200 rounded-full top-12"></div>
-        <div
-          className="absolute w-24 h-24 rounded-full top-12 transition-all duration-500"
-          style={{
-            background: `conic-gradient(${color} ${percentage}%, transparent ${percentage}%)`,
-            transform: "rotate(-90deg)",
-          }}
-        ></div>
-        <div className="absolute w-20 h-20 rounded-full top-14 left-2"></div>
-        <div className="absolute w-full text-center top-4 text-sm font-bold">
-          {value.toFixed(3)}
-        </div>
-      </div>
+    <div style={{ textAlign: 'center' }}>
+      <h2>{title}</h2>
+      <svg
+        width={radius * 2}
+        height={radius}
+        viewBox={`0 0 ${radius * 2} ${radius}`}
+      >
+        {/* Outer Circle */}
+        <circle
+          stroke="#e6e6e6"
+          strokeWidth={strokeWidth}
+          fill="none"
+          cx={radius}
+          cy={radius}
+          r={normalizedRadius}
+        />
+        {/* Semi Circle Gauge */}
+        <circle
+          stroke={color}
+          strokeWidth={strokeWidth}
+          fill="none"
+          cx={radius}
+          cy={radius}
+          r={normalizedRadius}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          transform={`rotate(-90 ${radius} ${radius})`}
+          strokeLinecap="round"
+        />
+        {/* Inner Circle to make it look like a gauge */}
+        <circle
+          stroke="#e6e6e6"
+          strokeWidth={strokeWidth}
+          fill="none"
+          cx={radius}
+          cy={radius}
+          r={normalizedRadius - 10}
+        />
+        {/* Text Value */}
+        <text
+          x="50%"
+          y="50%"
+          dy=".3em"
+          textAnchor="middle"
+          fill={color}
+          fontSize="24"
+        >
+          {value?.toFixed(3) || "0.000"}
+        </text>
+      </svg>
     </div>
   );
 };
 
+
 function DashboardPage() {
-  const [timeDuration, setTimeDuration] = useState(30);
-  const [isFetching, setIsFetching] = useState(false);
-  const [timeSeriesData, setTimeSeriesData] = useState([]);
-  const [baselineValues, setBaselineValues] = useState(null);
-  const [currentStep, setCurrentStep] = useState(0);
-
-  // Function to generate randomized data with a slope
-  const generateRandomData = (step) => {
-    const uts = 11 + (step * 0.01) + (Math.random() * 0.2 - 0.1); // Slope + Random offset
-    const conductivity = 60 + (step * 0.02) + (Math.random() * 0.4 - 0.2); // Slope + Random offset
-    const elongation = 20 + (step * 0.03) + (Math.random() * 0.4 - 0.2); // Slope + Random offset
-
-    return { uts, conductivity, elongation };
-  };
+  const {
+    realTimeData,
+    handlePLC,
+    resetResults,
+    updateLoading,
+  } = useStore();
+  
+  const [isPLC, setIsPLC] = useState(false);
+  const [timeRange, setTimeRange] = useState(60); // Default to the last 60 seconds
 
   useEffect(() => {
-    let interval;
-    if (isFetching) {
-      interval = setInterval(() => {
-        const currentData = generateRandomData(currentStep);
-        setCurrentStep((prevStep) => prevStep + 1);
-
-        if (!baselineValues) {
-          setBaselineValues(currentData);
-        }
-
-        if (baselineValues) {
-          const relativeData = {
-            uts:
-              ((currentData.uts - baselineValues.uts) / baselineValues.uts) * 100,
-            conductivity:
-              ((currentData.conductivity - baselineValues.conductivity) /
-                baselineValues.conductivity) *
-              100,
-            elongation:
-              ((currentData.elongation - baselineValues.elongation) /
-                baselineValues.elongation) *
-              100,
-            time: timeSeriesData.length + 1,
-            originalUts: currentData.uts,
-            originalConductivity: currentData.conductivity,
-            originalElongation: currentData.elongation,
-          };
-
-          setTimeSeriesData((prevData) => {
-            const updatedData = [...prevData, relativeData];
-            return updatedData.slice(-12); // Keep the last 12 data points
-          });
-        }
-      }, 2000);
+    let interval = null;
+    if (isPLC) {
+      interval = setInterval(handlePLC, 10000);
     }
-
     return () => {
       if (interval) {
         clearInterval(interval);
       }
     };
-  }, [isFetching, baselineValues, timeSeriesData, currentStep]);
+  }, [isPLC, handlePLC]);
 
-  const filteredData = timeSeriesData.filter(
-    (item) => item.time <= timeDuration
-  );
+  const handlePLCToggle = () => {
+    updateLoading(true);
+    if (isPLC) {
+      resetResults();
+    } else {
+      handlePLC();
+    }
+    setIsPLC((prev) => !prev);
+  };
+
+  const now = realTimeData.length ? realTimeData[realTimeData.length - 1].counter : 0;
+  const filteredData = realTimeData.filter((entry) => entry.counter >= now - timeRange);
+
+  const transformedData = filteredData.map((entry) => ({
+    time: entry.counter,
+    uts: entry.predictions.uts,
+    conductivity: entry.predictions.conductivity,
+    elongation: entry.predictions.elongation,
+    originalUts: entry.predictions.uts,
+    originalConductivity: entry.predictions.conductivity,
+    originalElongation: entry.predictions.elongation,
+  }));
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="p-4 border rounded shadow">
-          <p className="text-sm font-bold">Time: {label}</p>
+        <div className="p-4 border rounded shadow bg-white">
+          <p className="text-sm font-bold">Time: {label}s</p>
           {payload.map((entry, index) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {" "}
-              {entry.payload[
-                `original${
-                  entry.name.charAt(0).toUpperCase() + entry.name.slice(1)
-                }`
-              ].toFixed(6)}
-              <span className="ml-2">({entry.value.toFixed(4)}% change)</span>
+              {entry.name}: {entry.value.toFixed(3)}
             </p>
           ))}
         </div>
@@ -121,44 +140,49 @@ function DashboardPage() {
     return null;
   };
 
+  const latestData = realTimeData[realTimeData.length - 1]?.predictions || {};
+
   return (
     <div className="p-4 space-y-4">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold">Real-time Monitoring</h2>
+        <Button
+          value={isPLC ? "Stop PLC" : "Start PLC"}
+          type={isPLC ? "filled" : ""}
+          onClick={handlePLCToggle}
+        />
+      </div>
+
       <div className="rounded-lg shadow-md p-6">
         <div className="mb-4">
-          <h2 className="text-xl font-bold mb-4">
-            Material Properties Time Series (% Change from Baseline)
-          </h2>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Time Duration: {timeDuration}
-            </label>
+          <h2 className="text-xl font-bold mb-4">Material Properties Time Series</h2>
+          <div className="flex justify-between items-center mb-4">
+            <label className="text-sm font-medium">Time Range (seconds):</label>
             <input
               type="range"
-              min="5"
-              max="30"
-              step="5"
-              value={timeDuration}
-              onChange={(e) => setTimeDuration(Number(e.target.value))}
-              className="w-full"
+              min="10"
+              max="60"
+              step="10"
+              value={timeRange}
+              onChange={(e) => setTimeRange(Number(e.target.value))}
+              className="w-full mx-4"
             />
+            <span className="text-sm">{timeRange}s</span>
           </div>
-
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={filteredData}>
+              <LineChart data={transformedData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="time"
-                  label={{ value: "Time", position: "bottom" }}
+                  label={{ value: "Time (s)", position: "bottom" }}
                 />
                 <YAxis
                   label={{
-                    value: "% Change from Baseline",
+                    value: "Value",
                     angle: -90,
                     position: "left",
                   }}
-                  domain={[-10, 10]}
-                  tickFormatter={(value) => value.toFixed(3) + "%"}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
@@ -169,7 +193,7 @@ function DashboardPage() {
                   stroke="#4ade80"
                   strokeWidth={2}
                   dot={{ r: 4 }}
-                  name="elongation"
+                  name="Elongation"
                 />
                 <Line
                   type="monotone"
@@ -177,7 +201,7 @@ function DashboardPage() {
                   stroke="#f43f5e"
                   strokeWidth={2}
                   dot={{ r: 4 }}
-                  name="conductivity"
+                  name="Conductivity"
                 />
                 <Line
                   type="monotone"
@@ -185,7 +209,7 @@ function DashboardPage() {
                   stroke="#3b82f6"
                   strokeWidth={2}
                   dot={{ r: 4 }}
-                  name="uts"
+                  name="UTS"
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -197,49 +221,25 @@ function DashboardPage() {
         <h2 className="text-xl font-bold mb-4">Current Values</h2>
         <div className="flex justify-around">
           <SemiCircleGauge
-            value={
-              timeSeriesData.length > 0
-                ? timeSeriesData[timeSeriesData.length - 1].originalElongation
-                : 0
-            }
+            value={latestData.elongation}
             max={100}
             title="Elongation"
             color="#4ade80"
           />
           <SemiCircleGauge
-            value={
-              timeSeriesData.length > 0
-                ? timeSeriesData[timeSeriesData.length - 1].originalConductivity
-                : 0
-            }
-            max={100}
+            value={latestData.conductivity}
+            max={20}
             title="Conductivity"
             color="#f43f5e"
           />
           <SemiCircleGauge
-            value={
-              timeSeriesData.length > 0
-                ? timeSeriesData[timeSeriesData.length - 1].originalUts
-                : 0
-            }
+            value={latestData.uts}
             max={20}
             title="UTS"
             color="#3b82f6"
           />
         </div>
       </div>
-
-      <button
-        className="px-4 py-2 bg-red-700 text-white rounded hover:bg-red-600 transition-colors"
-        onClick={() => {
-          if (!isFetching) {
-            setBaselineValues(null);
-          }
-          setIsFetching(!isFetching);
-        }}
-      >
-        {isFetching ? "Stop" : "Start"} Data Updates
-      </button>
     </div>
   );
 }

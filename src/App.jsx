@@ -18,7 +18,7 @@ function App() {
     <Router>
       <Layout>
         <Routes>
-          <Route index element={<Navigate to="/predict" />} />
+          <Route index element={<Navigate to="/home" />} />
           <Route path="/home" element={<HomePage />} />
           <Route path="/predict" element={<PredictPage />} />
           <Route path="/reverse" element={<ReversePage />} />
